@@ -124,24 +124,6 @@ body {
 .week-nav { display: flex; gap: 8px; align-items: center; }
 
 /* ── SEDE FILTER ── */
-.sede-filter {
-  display: flex;
-  gap: 6px;
-}
-.sede-btn {
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text2);
-  transition: all 0.15s;
-}
-.sede-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
-.sede-btn.galicia.active { background: var(--blue); border-color: var(--blue); }
-.sede-btn.pinares.active { background: var(--purple); border-color: var(--purple); }
 
 /* ── SCHEDULE GRID ── */
 .schedule-wrapper { overflow-x: auto; }
@@ -313,6 +295,38 @@ body {
 }
 .modal-sub { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
 
+
+.presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.preset-btn {
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1.4;
+}
+.preset-btn:hover { border-color: var(--accent2); color: var(--text); }
+.preset-btn .preset-label { display: block; color: var(--text); font-size: 12px; }
+.preset-btn .preset-hours { display: block; color: var(--text3); font-size: 10px; font-family: 'DM Mono', monospace; margin-top: 2px; }
+.preset-divider {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text3);
+}
+.preset-divider::before, .preset-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
 
 .tipo-selector {
   display: grid;
@@ -664,6 +678,55 @@ body {
   .tab { padding: 8px 14px; white-space: nowrap; }
 }
 </style>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
+    authDomain: "padel-house-horarios.firebaseapp.com",
+    databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
+    projectId: "padel-house-horarios",
+    storageBucket: "padel-house-horarios.firebasestorage.app",
+    messagingSenderId: "53844596745",
+    appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // ── Save to Firebase ─────────────────────────────────────────────────
+  window.fbSavePersonal = function(data) {
+    set(ref(db, 'personal'), data).catch(e => console.error('FB save personal:', e));
+  };
+  window.fbSaveTurnos = function(data) {
+    set(ref(db, 'turnos'), data).catch(e => console.error('FB save turnos:', e));
+  };
+
+  // ── Load initial data & listen for real-time changes ─────────────────
+  window.fbReady = new Promise(resolve => {
+    // Load personal
+    onValue(ref(db, 'personal'), snap => {
+      const data = snap.val();
+      if (data && Array.isArray(data)) {
+        window.personal = data;
+        if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
+      }
+      resolve();
+    });
+    // Load turnos
+    onValue(ref(db, 'turnos'), snap => {
+      const data = snap.val();
+      if (data && typeof data === 'object') {
+        window.turnos = data;
+        if (window.renderSchedule) renderSchedule();
+      }
+    });
+  });
+
+  window.fbLoaded = true;
+  console.log('Firebase connected ✅');
+</script>
 </head>
 <body>
 
@@ -673,16 +736,10 @@ body {
     <div class="nav-logo">🎾</div>
     <div>
       <div class="nav-title">Padel House</div>
-      <div class="nav-sub">Gestión de Horarios</div>
+      <div class="nav-sub">Gestión de Horarios <span id="sync-status" style="font-size:9px;opacity:0.7;">⏳ conectando...</span></div>
     </div>
   </div>
-  <div class="nav-actions">
-    <div class="sede-filter">
-      <button class="sede-btn active" onclick="setSede('todas')">Todas</button>
-      <button class="sede-btn galicia" onclick="setSede('Galicia')">Galicia</button>
-      <button class="sede-btn pinares" onclick="setSede('Pinares')">Pinares</button>
-    </div>
-  </div>
+  <div class="nav-actions"></div>
 </nav>
 
 <!-- TABS -->
@@ -820,6 +877,25 @@ body {
     <div class="modal-title" id="modal-title">Turno</div>
     <div class="modal-sub" id="modal-sub"></div>
 
+    <div class="presets">
+      <button class="preset-btn" onclick="applyPreset('CAJA','07:00','13:00','15:00')">
+        <span class="preset-label">☀️ Caja Mañana</span>
+        <span class="preset-hours">7:00 AM → 3:00 PM · Desc 1:00 PM</span>
+      </button>
+      <button class="preset-btn" onclick="applyPreset('CAJA','15:30','19:00','23:00')">
+        <span class="preset-label">🌙 Caja Tarde</span>
+        <span class="preset-hours">3:30 PM → 11:00 PM · Desc 7:00 PM</span>
+      </button>
+      <button class="preset-btn" onclick="applyPreset('SERVICIO','07:00','13:00','15:00')">
+        <span class="preset-label">☀️ Servicio Mañana</span>
+        <span class="preset-hours">7:00 AM → 3:00 PM · Desc 1:00 PM</span>
+      </button>
+      <button class="preset-btn" onclick="applyPreset('SERVICIO','15:30','19:00','23:00')">
+        <span class="preset-label">🌙 Servicio Tarde</span>
+        <span class="preset-hours">3:30 PM → 11:00 PM · Desc 7:00 PM</span>
+      </button>
+    </div>
+    <div class="preset-divider">o elige manualmente</div>
     <div class="tipo-selector">
       <button class="tipo-btn servicio" onclick="selectTipo('SERVICIO')">🟢 Servicio</button>
       <button class="tipo-btn caja"     onclick="selectTipo('CAJA')">🟡 Caja</button>
@@ -868,6 +944,7 @@ const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
 function loadPersonal() {
+  // Firebase is source of truth — localStorage is cache
   const raw = localStorage.getItem(STORE_PERSONAL);
   if (raw) return JSON.parse(raw);
   return [];
@@ -875,6 +952,7 @@ function loadPersonal() {
 
 function savePersonal(data) {
   localStorage.setItem(STORE_PERSONAL, JSON.stringify(data));
+  if (window.fbSavePersonal) window.fbSavePersonal(data);
 }
 
 function loadTurnos() {
@@ -884,13 +962,14 @@ function loadTurnos() {
 
 function saveTurnos(data) {
   localStorage.setItem(STORE_TURNOS, JSON.stringify(data));
+  if (window.fbSaveTurnos) window.fbSaveTurnos(data);
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────
 let personal = loadPersonal();
 let turnos   = loadTurnos();
 let currentWeekStart = getMonday(new Date());
-let currentSede = 'todas';
+const currentSede = 'todas';
 let modalCtx = null; // { empId, dateKey }
 let modalTipo = 'SERVICIO';
 
@@ -984,13 +1063,6 @@ function changeWeek(dir) {
 
 function goToday() {
   currentWeekStart = getMonday(new Date());
-  renderSchedule();
-}
-
-function setSede(sede) {
-  currentSede = sede;
-  document.querySelectorAll('.sede-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
   renderSchedule();
 }
 
@@ -1185,6 +1257,21 @@ function openModal(empId, dk) {
   buildTimeOptions('inp-desc-fin',  descFin);
   updateHorasPreview();
   document.getElementById('modal-turno').classList.add('open');
+}
+
+function applyPreset(tipo, entrada, descInicio, salida) {
+  selectTipo(tipo);
+  function setSelect(id, val) {
+    const sel = document.getElementById(id);
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === val) { sel.selectedIndex = i; break; }
+    }
+  }
+  setSelect('inp-entrada', entrada);
+  setSelect('inp-desc',    descInicio);
+  setSelect('inp-salida',  salida);
+  setSelect('inp-desc-fin', addMinutes(descInicio, 30));
+  updateHorasPreview();
 }
 
 function closeModal() {
@@ -2057,6 +2144,25 @@ function exportNomina() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 initResumenSelectors();
+
+// Show Firebase sync status
+if (window.fbLoaded !== undefined) {
+  const syncEl = document.getElementById('sync-status');
+  if (syncEl) {
+    const checkFb = setInterval(() => {
+      if (window.fbLoaded) {
+        syncEl.textContent = '🟢 sincronizado';
+        clearInterval(checkFb);
+      }
+    }, 500);
+    setTimeout(() => {
+      if (syncEl.textContent.includes('conectando')) {
+        syncEl.textContent = '🔴 sin conexión';
+      }
+    }, 5000);
+  }
+}
+
 // Set default export dates to current month
 const now = new Date();
 const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
