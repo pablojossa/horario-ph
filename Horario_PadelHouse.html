@@ -2146,21 +2146,18 @@ function exportNomina() {
 initResumenSelectors();
 
 // Show Firebase sync status
-if (window.fbLoaded !== undefined) {
-  const syncEl = document.getElementById('sync-status');
-  if (syncEl) {
-    const checkFb = setInterval(() => {
-      if (window.fbLoaded) {
-        syncEl.textContent = '🟢 sincronizado';
-        clearInterval(checkFb);
-      }
-    }, 500);
-    setTimeout(() => {
-      if (syncEl.textContent.includes('conectando')) {
-        syncEl.textContent = '🔴 sin conexión';
-      }
-    }, 5000);
-  }
+const syncEl = document.getElementById('sync-status');
+if (syncEl && window.fbReady) {
+  window.fbReady.then(() => {
+    syncEl.textContent = '🟢 sincronizado';
+  }).catch(() => {
+    syncEl.textContent = '🔴 sin conexión';
+  });
+  setTimeout(() => {
+    if (syncEl.textContent.includes('conectando')) {
+      syncEl.textContent = '🔴 sin conexión';
+    }
+  }, 8000);
 }
 
 // Set default export dates to current month
