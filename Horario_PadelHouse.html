@@ -701,20 +701,41 @@ body {
   };
 
   // Listen for real-time changes
+  // Si Firebase tiene datos los usa; si está vacío y hay datos locales, los sube
   db.ref('personal').on('value', snap => {
     const data = snap.val();
-    if (data && Array.isArray(data)) {
+    if (data && Array.isArray(data) && data.length > 0) {
+      // Firebase tiene datos — usarlos
       window.personal = data;
       localStorage.setItem('ph_personal', JSON.stringify(data));
       if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
+    } else {
+      // Firebase vacío — si hay datos locales, subirlos
+      const local = localStorage.getItem('ph_personal');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed && parsed.length > 0) {
+          db.ref('personal').set(parsed);
+        }
+      }
     }
   });
   db.ref('turnos').on('value', snap => {
     const data = snap.val();
-    if (data && typeof data === 'object') {
+    if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+      // Firebase tiene datos — usarlos
       window.turnos = data;
       localStorage.setItem('ph_turnos', JSON.stringify(data));
       if (window.renderSchedule) renderSchedule();
+    } else {
+      // Firebase vacío — si hay datos locales, subirlos
+      const local = localStorage.getItem('ph_turnos');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed && Object.keys(parsed).length > 0) {
+          db.ref('turnos').set(parsed);
+        }
+      }
     }
   });
 
