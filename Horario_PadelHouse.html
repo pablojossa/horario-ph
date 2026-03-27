@@ -728,7 +728,14 @@ body {
       <div class="nav-sub">Gestión de Horarios <span id="sync-status" style="font-size:9px;opacity:0.7;">⏳</span></div>
     </div>
   </div>
-  <div class="nav-actions"></div>
+  <div class="nav-actions">
+    <button onclick="guardarTodo()" id="btn-guardar" style="
+      background:#2ecc71;color:white;border:none;padding:8px 18px;
+      border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
+      font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px;
+      transition:all 0.2s;
+    ">💾 Guardar</button>
+  </div>
 </nav>
 
 <!-- TABS -->
@@ -933,7 +940,8 @@ const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
 function loadPersonal() {
-  return []; // Firebase carga los datos via onValue
+  const raw = localStorage.getItem('ph_personal');
+  return raw ? JSON.parse(raw) : [];
 }
 
 function savePersonal(data) {
@@ -942,7 +950,8 @@ function savePersonal(data) {
 }
 
 function loadTurnos() {
-  return {}; // Firebase carga los datos via onValue
+  const raw = localStorage.getItem('ph_turnos');
+  return raw ? JSON.parse(raw) : {};
 }
 
 function saveTurnos(data) {
@@ -1257,6 +1266,33 @@ function applyPreset(tipo, entrada, descInicio, salida) {
   setSelect('inp-salida',  salida);
   setSelect('inp-desc-fin', addMinutes(descInicio, 30));
   updateHorasPreview();
+}
+
+function guardarTodo() {
+  const btn = document.getElementById('btn-guardar');
+  if (!window.fbSavePersonal) { showToast('⚠️ Sin conexión a Firebase'); return; }
+  btn.textContent = '⏳ Guardando...';
+  btn.style.background = '#f5a623';
+  btn.disabled = true;
+  // Guardar personal y turnos en Firebase
+  Promise.all([
+    window.fbSavePersonal(personal),
+    window.fbSaveTurnos(turnos)
+  ]).then(() => {
+    btn.textContent = '✅ Guardado';
+    btn.style.background = '#2ecc71';
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.textContent = '💾 Guardar';
+      btn.style.background = '#2ecc71';
+    }, 2000);
+    showToast('✅ Datos guardados y sincronizados');
+  }).catch(e => {
+    btn.textContent = '❌ Error';
+    btn.style.background = '#e74c3c';
+    btn.disabled = false;
+    showToast('❌ Error al guardar: ' + e.message);
+  });
 }
 
 function closeModal() {
