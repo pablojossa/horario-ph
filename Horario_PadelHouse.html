@@ -694,8 +694,23 @@ body {
   window.fbSavePersonal = d => fbdb.ref('personal').set(d);
   window.fbSaveTurnos   = d => fbdb.ref('turnos').set(d);
 
-  // Escuchar cambios en tiempo real — Firebase manda, app recibe
+  // Carga inicial desde Firebase al abrir la app
+  let _initDone = false;
+  Promise.all([
+    fbdb.ref('personal').once('value'),
+    fbdb.ref('turnos').once('value')
+  ]).then(([snapP, snapT]) => {
+    const p = snapP.val();
+    const t = snapT.val();
+    if (p && Array.isArray(p) && p.length > 0) window.personal = p;
+    if (t && typeof t === 'object' && Object.keys(t).length > 0) window.turnos = t;
+    _initDone = true;
+    if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
+  }).catch(() => { _initDone = true; });
+
+  // Escuchar cambios en tiempo real de OTROS dispositivos
   fbdb.ref('personal').on('value', snap => {
+    if (!_initDone) return; // esperar carga inicial
     const d = snap.val();
     if (d && Array.isArray(d) && d.length > 0) {
       window.personal = d;
@@ -704,6 +719,7 @@ body {
   });
 
   fbdb.ref('turnos').on('value', snap => {
+    if (!_initDone) return; // esperar carga inicial
     const d = snap.val();
     if (d && typeof d === 'object' && Object.keys(d).length > 0) {
       window.turnos = d;
@@ -946,8 +962,7 @@ const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
 function loadPersonal() {
-  const raw = localStorage.getItem('ph_personal');
-  return raw ? JSON.parse(raw) : [];
+  return []; // Firebase es la fuente — se carga via onValue
 }
 
 function savePersonal(data) {
@@ -956,8 +971,7 @@ function savePersonal(data) {
 }
 
 function loadTurnos() {
-  const raw = localStorage.getItem('ph_turnos');
-  return raw ? JSON.parse(raw) : {};
+  return {}; // Firebase es la fuente — se carga via onValue
 }
 
 function saveTurnos(data) {
