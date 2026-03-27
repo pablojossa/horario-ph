@@ -1291,38 +1291,39 @@ function applyPreset(tipo, entrada, descInicio, salida) {
 function actualizarDesdeFirebase() {
   const btn = document.getElementById('btn-actualizar');
   if (!window.fbdb) { showToast('⚠️ Sin conexión a Firebase'); return; }
-  btn.textContent = '⏳ Actualizando...';
+  btn.textContent = '⏳';
   btn.disabled = true;
-  // Leer personal
-  window.fbdb.ref('personal').once('value').then(snap => {
-    const d = snap.val();
-    if (d && Array.isArray(d) && d.length > 0) {
-      window.personal = d;
-      localStorage.setItem('ph_personal', JSON.stringify(d));
-    }
-    return window.fbdb.ref('turnos').once('value');
-  }).then(snap => {
-    const d = snap.val();
-    if (d && typeof d === 'object' && Object.keys(d).length > 0) {
-      window.turnos = d;
-      localStorage.setItem('ph_turnos', JSON.stringify(d));
-    }
+  // Leer ambos en paralelo
+  const refP = window.fbdb.ref('personal');
+  const refT = window.fbdb.ref('turnos');
+  let doneP = false, doneT = false;
+
+  refP.once('value', snapP => {
+    const d = snapP.val();
+    if (d && Array.isArray(d) && d.length > 0) window.personal = d;
+    doneP = true;
+    if (doneP && doneT) _finActualizar();
+  });
+  refT.once('value', snapT => {
+    const d = snapT.val();
+    if (d && typeof d === 'object' && Object.keys(d).length > 0) window.turnos = d;
+    doneT = true;
+    if (doneP && doneT) _finActualizar();
+  });
+
+  function _finActualizar() {
     renderPersonal();
     renderSchedule();
-    btn.textContent = '✅ Actualizado';
+    btn.textContent = '✅';
     btn.style.background = '#2ecc71';
     btn.disabled = false;
-    setTimeout(() => {
-      btn.textContent = '🔄 Actualizar';
-      btn.style.background = '#3498db';
-    }, 2000);
-    showToast('✅ Datos actualizados desde Firebase');
-  }).catch(e => {
-    btn.textContent = '❌ Error';
-    btn.disabled = false;
     setTimeout(() => { btn.textContent = '🔄 Actualizar'; btn.style.background = '#3498db'; }, 2000);
-    showToast('❌ Error al actualizar');
-  });
+    showToast('✅ Datos actualizados');
+  }
+  // Timeout de seguridad
+  setTimeout(() => {
+    if (btn.disabled) { btn.textContent = '🔄 Actualizar'; btn.style.background = '#3498db'; btn.disabled = false; }
+  }, 5000);
 }
 
 function guardarTodo() {
