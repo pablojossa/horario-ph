@@ -678,75 +678,6 @@ body {
   .tab { padding: 8px 14px; white-space: nowrap; }
 }
 </style>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
-    authDomain: "padel-house-horarios.firebaseapp.com",
-    databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
-    projectId: "padel-house-horarios",
-    storageBucket: "padel-house-horarios.firebasestorage.app",
-    messagingSenderId: "53844596745",
-    appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-
-  window.fbSavePersonal = function(data) {
-    db.ref('personal').set(data).catch(e => console.error('FB personal:', e));
-  };
-  window.fbSaveTurnos = function(data) {
-    db.ref('turnos').set(data).catch(e => console.error('FB turnos:', e));
-  };
-
-  // Listen for real-time changes
-  // Si Firebase tiene datos los usa; si está vacío y hay datos locales, los sube
-  db.ref('personal').on('value', snap => {
-    const data = snap.val();
-    if (data && Array.isArray(data) && data.length > 0) {
-      // Firebase tiene datos — usarlos
-      window.personal = data;
-      localStorage.setItem('ph_personal', JSON.stringify(data));
-      if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
-    } else {
-      // Firebase vacío — si hay datos locales, subirlos
-      const local = localStorage.getItem('ph_personal');
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (parsed && parsed.length > 0) {
-          db.ref('personal').set(parsed);
-        }
-      }
-    }
-  });
-  db.ref('turnos').on('value', snap => {
-    const data = snap.val();
-    if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-      // Firebase tiene datos — usarlos
-      window.turnos = data;
-      localStorage.setItem('ph_turnos', JSON.stringify(data));
-      if (window.renderSchedule) renderSchedule();
-    } else {
-      // Firebase vacío — si hay datos locales, subirlos
-      const local = localStorage.getItem('ph_turnos');
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (parsed && Object.keys(parsed).length > 0) {
-          db.ref('turnos').set(parsed);
-        }
-      }
-    }
-  });
-
-  // Connection status
-  db.ref('.info/connected').on('value', snap => {
-    const syncEl = document.getElementById('sync-status');
-    if (syncEl) {
-      syncEl.textContent = snap.val() ? '🟢 en línea' : '🔴 sin conexión';
-    }
-  });
-</script>
 </head>
 <body>
 
@@ -756,7 +687,7 @@ body {
     <div class="nav-logo">🎾</div>
     <div>
       <div class="nav-title">Padel House</div>
-      <div class="nav-sub">Gestión de Horarios <span id="sync-status" style="font-size:9px;opacity:0.7;">⏳ cargando...</span></div>
+      <div class="nav-sub">Gestión de Horarios</div>
     </div>
   </div>
   <div class="nav-actions"></div>
@@ -972,7 +903,6 @@ function loadPersonal() {
 
 function savePersonal(data) {
   localStorage.setItem(STORE_PERSONAL, JSON.stringify(data));
-  if (window.fbSavePersonal) window.fbSavePersonal(data);
 }
 
 function loadTurnos() {
@@ -982,7 +912,6 @@ function loadTurnos() {
 
 function saveTurnos(data) {
   localStorage.setItem(STORE_TURNOS, JSON.stringify(data));
-  if (window.fbSaveTurnos) window.fbSaveTurnos(data);
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────
@@ -2164,21 +2093,6 @@ function exportNomina() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 initResumenSelectors();
-
-// Show Firebase sync status
-const syncEl = document.getElementById('sync-status');
-if (syncEl && window.fbReady) {
-  window.fbReady.then(() => {
-    syncEl.textContent = '🟢 sincronizado';
-  }).catch(() => {
-    syncEl.textContent = '🔴 sin conexión';
-  });
-  setTimeout(() => {
-    if (syncEl.textContent.includes('conectando')) {
-      syncEl.textContent = '🔴 sin conexión';
-    }
-  }, 8000);
-}
 
 // Set default export dates to current month
 const now = new Date();
