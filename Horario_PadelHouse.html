@@ -678,6 +678,81 @@ body {
   .tab { padding: 8px 14px; white-space: nowrap; }
 }
 </style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
+    authDomain: "padel-house-horarios.firebaseapp.com",
+    databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
+    projectId: "padel-house-horarios",
+    storageBucket: "padel-house-horarios.firebasestorage.app",
+    messagingSenderId: "53844596745",
+    appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbdb = firebase.database();
+
+  // Guardar en Firebase
+  window.fbSavePersonal = function(data) {
+    fbdb.ref('personal').set(data).catch(e => console.error('FB personal:', e));
+  };
+  window.fbSaveTurnos = function(data) {
+    fbdb.ref('turnos').set(data).catch(e => console.error('FB turnos:', e));
+  };
+
+  // Sincronizacion en tiempo real
+  // REGLA: Firebase gana si tiene datos. Si Firebase está vacío, subir localStorage.
+  let personalLoaded = false;
+  let turnosLoaded = false;
+
+  fbdb.ref('personal').on('value', snap => {
+    const fbData = snap.val();
+    if (fbData && Array.isArray(fbData) && fbData.length > 0) {
+      // Firebase tiene datos — actualizar app
+      window.personal = fbData;
+      localStorage.setItem('ph_personal', JSON.stringify(fbData));
+      if (personalLoaded && window.renderPersonal) { renderPersonal(); renderSchedule(); }
+    } else if (!personalLoaded) {
+      // Firebase vacío en primera carga — subir datos locales si existen
+      const local = localStorage.getItem('ph_personal');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed && parsed.length > 0) {
+          fbdb.ref('personal').set(parsed);
+          // No renderizar aún — esperamos la confirmación de Firebase
+        }
+      }
+    }
+    personalLoaded = true;
+  });
+
+  fbdb.ref('turnos').on('value', snap => {
+    const fbData = snap.val();
+    if (fbData && typeof fbData === 'object' && Object.keys(fbData).length > 0) {
+      // Firebase tiene datos — actualizar app
+      window.turnos = fbData;
+      localStorage.setItem('ph_turnos', JSON.stringify(fbData));
+      if (turnosLoaded && window.renderSchedule) renderSchedule();
+    } else if (!turnosLoaded) {
+      // Firebase vacío en primera carga — subir datos locales si existen
+      const local = localStorage.getItem('ph_turnos');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed && Object.keys(parsed).length > 0) {
+          fbdb.ref('turnos').set(parsed);
+        }
+      }
+    }
+    turnosLoaded = true;
+  });
+
+  // Indicador de conexion
+  fbdb.ref('.info/connected').on('value', snap => {
+    const el = document.getElementById('sync-status');
+    if (el) el.textContent = snap.val() ? '🟢 en línea' : '🔴 sin conexión';
+  });
+</script>
 </head>
 <body>
 
@@ -687,7 +762,7 @@ body {
     <div class="nav-logo">🎾</div>
     <div>
       <div class="nav-title">Padel House</div>
-      <div class="nav-sub">Gestión de Horarios</div>
+      <div class="nav-sub">Gestión de Horarios <span id="sync-status" style="font-size:9px;opacity:0.7;">⏳</span></div>
     </div>
   </div>
   <div class="nav-actions"></div>
@@ -903,6 +978,7 @@ function loadPersonal() {
 
 function savePersonal(data) {
   localStorage.setItem(STORE_PERSONAL, JSON.stringify(data));
+  if (window.fbSavePersonal) window.fbSavePersonal(data);
 }
 
 function loadTurnos() {
@@ -912,6 +988,7 @@ function loadTurnos() {
 
 function saveTurnos(data) {
   localStorage.setItem(STORE_TURNOS, JSON.stringify(data));
+  if (window.fbSaveTurnos) window.fbSaveTurnos(data);
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────
