@@ -982,7 +982,11 @@ function saveTurnos(data) {
 // ── STATE ─────────────────────────────────────────────────────────────────
 let personal = loadPersonal();
 let turnos   = loadTurnos();
-let currentWeekStart = getMonday(new Date());
+let currentWeekStart = (() => {
+  const saved = localStorage.getItem('_ph_semana');
+  if (saved) { localStorage.removeItem('_ph_semana'); return new Date(saved); }
+  return getMonday(new Date());
+})();
 const currentSede = 'todas';
 let modalCtx = null; // { empId, dateKey }
 let modalTipo = 'SERVICIO';
@@ -1289,41 +1293,11 @@ function applyPreset(tipo, entrada, descInicio, salida) {
 }
 
 function actualizarDesdeFirebase() {
-  const btn = document.getElementById('btn-actualizar');
-  if (!window.fbdb) { showToast('⚠️ Sin conexión a Firebase'); return; }
-  btn.textContent = '⏳';
-  btn.disabled = true;
-  // Leer ambos en paralelo
-  const refP = window.fbdb.ref('personal');
-  const refT = window.fbdb.ref('turnos');
-  let doneP = false, doneT = false;
-
-  refP.once('value', snapP => {
-    const d = snapP.val();
-    if (d && Array.isArray(d) && d.length > 0) window.personal = d;
-    doneP = true;
-    if (doneP && doneT) _finActualizar();
-  });
-  refT.once('value', snapT => {
-    const d = snapT.val();
-    if (d && typeof d === 'object' && Object.keys(d).length > 0) window.turnos = d;
-    doneT = true;
-    if (doneP && doneT) _finActualizar();
-  });
-
-  function _finActualizar() {
-    renderPersonal();
-    renderSchedule();
-    btn.textContent = '✅';
-    btn.style.background = '#2ecc71';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = '🔄 Actualizar'; btn.style.background = '#3498db'; }, 2000);
-    showToast('✅ Datos actualizados');
-  }
-  // Timeout de seguridad
-  setTimeout(() => {
-    if (btn.disabled) { btn.textContent = '🔄 Actualizar'; btn.style.background = '#3498db'; btn.disabled = false; }
-  }, 5000);
+  // Guardar semana actual para restaurarla despues de recargar
+  const semana = currentWeekStart.toISOString();
+  localStorage.setItem('_ph_semana', semana);
+  // Recargar pagina — Firebase carga los datos frescos al iniciar
+  location.reload();
 }
 
 function guardarTodo() {
