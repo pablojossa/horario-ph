@@ -681,73 +681,36 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
-  const firebaseConfig = {
+  firebase.initializeApp({
     apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
-    authDomain: "padel-house-horarios.firebaseapp.com",
     databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
     projectId: "padel-house-horarios",
-    storageBucket: "padel-house-horarios.firebasestorage.app",
-    messagingSenderId: "53844596745",
     appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
-  };
-  firebase.initializeApp(firebaseConfig);
+  });
   const fbdb = firebase.database();
 
-  // Guardar en Firebase
-  window.fbSavePersonal = function(data) {
-    fbdb.ref('personal').set(data).catch(e => console.error('FB personal:', e));
-  };
-  window.fbSaveTurnos = function(data) {
-    fbdb.ref('turnos').set(data).catch(e => console.error('FB turnos:', e));
-  };
+  // Guardar en Firebase (fuente de verdad)
+  window.fbSavePersonal = d => fbdb.ref('personal').set(d);
+  window.fbSaveTurnos   = d => fbdb.ref('turnos').set(d);
 
-  // Sincronizacion en tiempo real
-  // REGLA: Firebase gana si tiene datos. Si Firebase está vacío, subir localStorage.
-  let personalLoaded = false;
-  let turnosLoaded = false;
-
+  // Escuchar cambios en tiempo real — Firebase manda, app recibe
   fbdb.ref('personal').on('value', snap => {
-    const fbData = snap.val();
-    if (fbData && Array.isArray(fbData) && fbData.length > 0) {
-      // Firebase tiene datos — actualizar app
-      window.personal = fbData;
-      localStorage.setItem('ph_personal', JSON.stringify(fbData));
-      if (personalLoaded && window.renderPersonal) { renderPersonal(); renderSchedule(); }
-    } else if (!personalLoaded) {
-      // Firebase vacío en primera carga — subir datos locales si existen
-      const local = localStorage.getItem('ph_personal');
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (parsed && parsed.length > 0) {
-          fbdb.ref('personal').set(parsed);
-          // No renderizar aún — esperamos la confirmación de Firebase
-        }
-      }
+    const d = snap.val();
+    if (d && Array.isArray(d) && d.length > 0) {
+      window.personal = d;
+      if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
     }
-    personalLoaded = true;
   });
 
   fbdb.ref('turnos').on('value', snap => {
-    const fbData = snap.val();
-    if (fbData && typeof fbData === 'object' && Object.keys(fbData).length > 0) {
-      // Firebase tiene datos — actualizar app
-      window.turnos = fbData;
-      localStorage.setItem('ph_turnos', JSON.stringify(fbData));
-      if (turnosLoaded && window.renderSchedule) renderSchedule();
-    } else if (!turnosLoaded) {
-      // Firebase vacío en primera carga — subir datos locales si existen
-      const local = localStorage.getItem('ph_turnos');
-      if (local) {
-        const parsed = JSON.parse(local);
-        if (parsed && Object.keys(parsed).length > 0) {
-          fbdb.ref('turnos').set(parsed);
-        }
-      }
+    const d = snap.val();
+    if (d && typeof d === 'object' && Object.keys(d).length > 0) {
+      window.turnos = d;
+      if (window.renderSchedule) renderSchedule();
     }
-    turnosLoaded = true;
   });
 
-  // Indicador de conexion
+  // Indicador conexion
   fbdb.ref('.info/connected').on('value', snap => {
     const el = document.getElementById('sync-status');
     if (el) el.textContent = snap.val() ? '🟢 en línea' : '🔴 sin conexión';
@@ -970,10 +933,7 @@ const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
 function loadPersonal() {
-  // Firebase is source of truth — localStorage is cache
-  const raw = localStorage.getItem(STORE_PERSONAL);
-  if (raw) return JSON.parse(raw);
-  return [];
+  return []; // Firebase carga los datos via onValue
 }
 
 function savePersonal(data) {
@@ -982,8 +942,7 @@ function savePersonal(data) {
 }
 
 function loadTurnos() {
-  const raw = localStorage.getItem(STORE_TURNOS);
-  return raw ? JSON.parse(raw) : {};
+  return {}; // Firebase carga los datos via onValue
 }
 
 function saveTurnos(data) {
