@@ -765,31 +765,29 @@ async function sbActualizar() {
   btn.textContent = '🔄 Actualizar'; btn.disabled = false;
 }
 
-// CARGAR AL INICIO → desde Supabase
+// CARGAR AL INICIO → siempre desde Supabase, ignorar localStorage
 async function sbCargarInicio() {
   try {
     const res = await fetch(
       SB_URL + '/rest/v1/horario_app?id=eq.padel_house&select=personal,turnos',
       { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
     );
-    if (!res.ok) return;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const rows = await res.json();
     if (rows.length > 0) {
       const d = rows[0];
-      if (d.personal && d.personal.length > 0) {
-        personal = d.personal;
-        localStorage.setItem('ph_personal', JSON.stringify(personal));
-      }
-      if (d.turnos && Object.keys(d.turnos).length > 0) {
-        turnos = d.turnos;
-        localStorage.setItem('ph_turnos', JSON.stringify(turnos));
-      }
+      // SIEMPRE sobreescribir con datos de Supabase
+      personal = (d.personal && d.personal.length > 0) ? d.personal : [];
+      turnos   = (d.turnos  && Object.keys(d.turnos).length > 0) ? d.turnos : {};
+      localStorage.setItem('ph_personal', JSON.stringify(personal));
+      localStorage.setItem('ph_turnos',   JSON.stringify(turnos));
       renderPersonal();
       renderSchedule();
     }
     const el = document.getElementById('sync-status');
     if (el) el.textContent = '🟢';
   } catch(e) {
+    // Sin conexion — usar localStorage como fallback
     const el = document.getElementById('sync-status');
     if (el) el.textContent = '🔴';
   }
