@@ -678,21 +678,80 @@ body {
   .tab { padding: 8px 14px; white-space: nowrap; }
 }
 </style>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  firebase.initializeApp({
-    apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
-    databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
-    projectId: "padel-house-horarios",
-    appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
-  });
-  window._db = firebase.database();
+  const _sb = supabase.createClient(
+    'https://ixcqhparwhmpitwsokch.supabase.co',
+    'sb_publishable_LQGawcyc4W2lEHRdXo-wFw_sA_LDpD6'
+  );
 
   // Indicador de conexion
-  window._db.ref('.info/connected').on('value', s => {
+  document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('sync-status');
-    if (el) el.textContent = s.val() ? '🟢' : '🔴';
+    if (el) el.textContent = '🟢';
+  });
+
+  // GUARDAR — sube todo a Supabase
+  window.sbGuardar = async function() {
+    const btn = document.getElementById('btn-guardar');
+    btn.textContent = '⏳'; btn.disabled = true;
+    try {
+      const { error } = await _sb.from('horario_app')
+        .upsert({ id: 'padel_house', personal: window.personal, turnos: window.turnos, updated_at: new Date() });
+      if (error) throw error;
+      showToast('✅ Guardado — todos pueden actualizar');
+      btn.style.background = '#2ecc71';
+      btn.textContent = '💾 Guardar';
+    } catch(e) {
+      showToast('❌ Error: ' + e.message);
+      btn.textContent = '💾 Guardar';
+    }
+    btn.disabled = false;
+  };
+
+  // ACTUALIZAR — baja datos de Supabase
+  window.sbActualizar = async function() {
+    const btn = document.getElementById('btn-actualizar');
+    btn.textContent = '⏳'; btn.disabled = true;
+    try {
+      const { data, error } = await _sb.from('horario_app')
+        .select('personal, turnos').eq('id', 'padel_house').single();
+      if (error) throw error;
+      if (data.personal && data.personal.length > 0) {
+        window.personal = data.personal;
+        localStorage.setItem('ph_personal', JSON.stringify(data.personal));
+      }
+      if (data.turnos && Object.keys(data.turnos).length > 0) {
+        window.turnos = data.turnos;
+        localStorage.setItem('ph_turnos', JSON.stringify(data.turnos));
+      }
+      renderPersonal();
+      renderSchedule();
+      showToast('✅ Datos actualizados');
+    } catch(e) {
+      showToast('❌ Error: ' + e.message);
+    }
+    btn.textContent = '🔄 Actualizar'; btn.disabled = false;
+  };
+
+  // Cargar datos de Supabase al iniciar
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const { data, error } = await _sb.from('horario_app')
+        .select('personal, turnos').eq('id', 'padel_house').single();
+      if (!error && data) {
+        if (data.personal && data.personal.length > 0) {
+          window.personal = data.personal;
+          localStorage.setItem('ph_personal', JSON.stringify(data.personal));
+          if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
+        }
+        if (data.turnos && Object.keys(data.turnos).length > 0) {
+          window.turnos = data.turnos;
+          localStorage.setItem('ph_turnos', JSON.stringify(data.turnos));
+          if (window.renderSchedule) renderSchedule();
+        }
+      }
+    } catch(e) { console.log('Supabase init:', e.message); }
   });
 </script>
 </head>
@@ -709,8 +768,8 @@ body {
   </div>
   <div class="nav-actions" style="display:flex;gap:8px;align-items:center;">
     <span id="sync-status" style="font-size:11px;color:#888;">⏳</span>
-    <button id="btn-actualizar" onclick="fbActualizar()" style="background:#3498db;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Actualizar</button>
-    <button id="btn-guardar" onclick="fbGuardar()" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Guardar</button>
+    <button id="btn-actualizar" onclick="sbActualizar()" style="background:#3498db;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Actualizar</button>
+    <button id="btn-guardar" onclick="sbGuardar()" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Guardar</button>
   </div>
 </nav>
 
@@ -921,8 +980,9 @@ function loadPersonal() {
 }
 
 function savePersonal(data) {
-  localStorage.setItem(STORE_PERSONAL, JSON.stringify(data));
-  if (window.fbSavePersonal) window.fbSavePersonal(data);
+  localStorage.setItem('ph_personal', JSON.stringify(data));
+  const btn = document.getElementById('btn-guardar');
+  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
 }
 
 function loadTurnos() {
@@ -931,8 +991,9 @@ function loadTurnos() {
 }
 
 function saveTurnos(data) {
-  localStorage.setItem(STORE_TURNOS, JSON.stringify(data));
-  if (window.fbSaveTurnos) window.fbSaveTurnos(data);
+  localStorage.setItem('ph_turnos', JSON.stringify(data));
+  const btn = document.getElementById('btn-guardar');
+  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────
@@ -1246,51 +1307,6 @@ function applyPreset(tipo, entrada, descInicio, salida) {
 
 
 
-
-
-// ── FIREBASE GUARDAR / ACTUALIZAR ─────────────────────────────────────
-function fbGuardar() {
-  const btn = document.getElementById('btn-guardar');
-  if (!window._db) { showToast('⚠️ Sin conexión'); return; }
-  btn.textContent = '⏳'; btn.disabled = true;
-  window._db.ref('ph').set({ personal: window.personal, turnos: window.turnos })
-    .then(() => {
-      showToast('✅ Guardado — todos pueden actualizar');
-      btn.style.background = '#2ecc71';
-      btn.textContent = '💾 Guardar';
-      btn.disabled = false;
-    })
-    .catch(() => {
-      showToast('❌ Error al guardar');
-      btn.textContent = '💾 Guardar'; btn.style.background = '#2ecc71'; btn.disabled = false;
-    });
-}
-
-function fbActualizar() {
-  const btn = document.getElementById('btn-actualizar');
-  if (!window._db) { showToast('⚠️ Sin conexión'); return; }
-  btn.textContent = '⏳'; btn.disabled = true;
-  window._db.ref('ph').get()
-    .then(snap => {
-      const d = snap.val();
-      if (d && d.personal && Array.isArray(d.personal) && d.personal.length > 0) {
-        window.personal = d.personal;
-        localStorage.setItem('ph_personal', JSON.stringify(d.personal));
-      }
-      if (d && d.turnos && typeof d.turnos === 'object') {
-        window.turnos = d.turnos;
-        localStorage.setItem('ph_turnos', JSON.stringify(d.turnos));
-      }
-      renderPersonal();
-      renderSchedule();
-      showToast('✅ Actualizado desde Firebase');
-      btn.textContent = '🔄 Actualizar'; btn.disabled = false;
-    })
-    .catch(() => {
-      showToast('❌ Error al actualizar');
-      btn.textContent = '🔄 Actualizar'; btn.disabled = false;
-    });
-}
 
 
 function closeModal() {
