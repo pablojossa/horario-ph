@@ -678,81 +678,122 @@ body {
   .tab { padding: 8px 14px; white-space: nowrap; }
 }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const _sb = supabase.createClient(
-    'https://ixcqhparwhmpitwsokch.supabase.co',
-    'sb_publishable_LQGawcyc4W2lEHRdXo-wFw_sA_LDpD6'
-  );
+// ── SUPABASE CONFIG ───────────────────────────────────────────────────────
+const SB_URL = 'https://ixcqhparwhmpitwsokch.supabase.co';
+const SB_KEY = 'sb_publishable_LQGawcyc4W2lEHRdXo-wFw_sA_LDpD6';
 
-  // Indicador de conexion
-  document.addEventListener('DOMContentLoaded', () => {
-    const el = document.getElementById('sync-status');
-    if (el) el.textContent = '🟢';
-  });
-
-  // GUARDAR — sube todo a Supabase
-  window.sbGuardar = async function() {
-    const btn = document.getElementById('btn-guardar');
-    btn.textContent = '⏳'; btn.disabled = true;
-    try {
-      const { error } = await _sb.from('horario_app')
-        .upsert({ id: 'padel_house', personal: window.personal, turnos: window.turnos, updated_at: new Date() });
-      if (error) throw error;
-      showToast('✅ Guardado — todos pueden actualizar');
-      btn.style.background = '#2ecc71';
-      btn.textContent = '💾 Guardar';
-    } catch(e) {
-      showToast('❌ Error: ' + e.message);
-      btn.textContent = '💾 Guardar';
-    }
-    btn.disabled = false;
+function _sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Prefer': 'return=minimal'
   };
+}
 
-  // ACTUALIZAR — baja datos de Supabase
-  window.sbActualizar = async function() {
-    const btn = document.getElementById('btn-actualizar');
-    btn.textContent = '⏳'; btn.disabled = true;
-    try {
-      const { data, error } = await _sb.from('horario_app')
-        .select('personal, turnos').eq('id', 'padel_house').single();
-      if (error) throw error;
-      if (data.personal && data.personal.length > 0) {
-        window.personal = data.personal;
-        localStorage.setItem('ph_personal', JSON.stringify(data.personal));
+// Marcar boton guardar como pendiente
+function _markPending() {
+  const btn = document.getElementById('btn-guardar');
+  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
+}
+
+// GUARDAR → sube a Supabase
+async function sbGuardar() {
+  const btn = document.getElementById('btn-guardar');
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/horario_app?id=eq.padel_house', {
+      method: 'PATCH',
+      headers: _sbHeaders(),
+      body: JSON.stringify({
+        personal: personal,
+        turnos: turnos,
+        updated_at: new Date().toISOString()
+      })
+    });
+    if (!res.ok) {
+      // Si no existe el registro, crearlo
+      const res2 = await fetch(SB_URL + '/rest/v1/horario_app', {
+        method: 'POST',
+        headers: { ..._sbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ id: 'padel_house', personal: personal, turnos: turnos })
+      });
+      if (!res2.ok) throw new Error('Error ' + res2.status);
+    }
+    btn.style.background = '#2ecc71';
+    btn.textContent = '💾 Guardar';
+    showToast('✅ Guardado — todos pueden actualizar');
+  } catch(e) {
+    showToast('❌ Error guardando: ' + e.message);
+    btn.style.background = '#e94560';
+    btn.textContent = '💾 Guardar *';
+  }
+  btn.disabled = false;
+}
+
+// ACTUALIZAR → baja de Supabase
+async function sbActualizar() {
+  const btn = document.getElementById('btn-actualizar');
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch(
+      SB_URL + '/rest/v1/horario_app?id=eq.padel_house&select=personal,turnos',
+      { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+    );
+    if (!res.ok) throw new Error('Error ' + res.status);
+    const rows = await res.json();
+    if (rows.length > 0) {
+      const d = rows[0];
+      if (d.personal && d.personal.length > 0) {
+        personal = d.personal;
+        localStorage.setItem('ph_personal', JSON.stringify(personal));
       }
-      if (data.turnos && Object.keys(data.turnos).length > 0) {
-        window.turnos = data.turnos;
-        localStorage.setItem('ph_turnos', JSON.stringify(data.turnos));
+      if (d.turnos && Object.keys(d.turnos).length > 0) {
+        turnos = d.turnos;
+        localStorage.setItem('ph_turnos', JSON.stringify(turnos));
       }
       renderPersonal();
       renderSchedule();
       showToast('✅ Datos actualizados');
-    } catch(e) {
-      showToast('❌ Error: ' + e.message);
+    } else {
+      showToast('ℹ️ Supabase vacío — guardá primero');
     }
-    btn.textContent = '🔄 Actualizar'; btn.disabled = false;
-  };
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+  }
+  btn.textContent = '🔄 Actualizar'; btn.disabled = false;
+}
 
-  // Cargar datos de Supabase al iniciar
-  document.addEventListener('DOMContentLoaded', async () => {
-    try {
-      const { data, error } = await _sb.from('horario_app')
-        .select('personal, turnos').eq('id', 'padel_house').single();
-      if (!error && data) {
-        if (data.personal && data.personal.length > 0) {
-          window.personal = data.personal;
-          localStorage.setItem('ph_personal', JSON.stringify(data.personal));
-          if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
-        }
-        if (data.turnos && Object.keys(data.turnos).length > 0) {
-          window.turnos = data.turnos;
-          localStorage.setItem('ph_turnos', JSON.stringify(data.turnos));
-          if (window.renderSchedule) renderSchedule();
-        }
+// CARGAR AL INICIO → desde Supabase
+async function sbCargarInicio() {
+  try {
+    const res = await fetch(
+      SB_URL + '/rest/v1/horario_app?id=eq.padel_house&select=personal,turnos',
+      { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+    );
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (rows.length > 0) {
+      const d = rows[0];
+      if (d.personal && d.personal.length > 0) {
+        personal = d.personal;
+        localStorage.setItem('ph_personal', JSON.stringify(personal));
       }
-    } catch(e) { console.log('Supabase init:', e.message); }
-  });
+      if (d.turnos && Object.keys(d.turnos).length > 0) {
+        turnos = d.turnos;
+        localStorage.setItem('ph_turnos', JSON.stringify(turnos));
+      }
+      renderPersonal();
+      renderSchedule();
+    }
+    const el = document.getElementById('sync-status');
+    if (el) el.textContent = '🟢';
+  } catch(e) {
+    const el = document.getElementById('sync-status');
+    if (el) el.textContent = '🔴';
+  }
+}
 </script>
 </head>
 <body>
@@ -975,25 +1016,21 @@ const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
 function loadPersonal() {
-  const raw = localStorage.getItem('ph_personal');
-  return raw ? JSON.parse(raw) : [];
+  const r = localStorage.getItem('ph_personal'); return r ? JSON.parse(r) : [];
 }
 
 function savePersonal(data) {
   localStorage.setItem('ph_personal', JSON.stringify(data));
-  const btn = document.getElementById('btn-guardar');
-  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
+  _markPending();
 }
 
 function loadTurnos() {
-  const raw = localStorage.getItem('ph_turnos');
-  return raw ? JSON.parse(raw) : {};
+  const r = localStorage.getItem('ph_turnos'); return r ? JSON.parse(r) : {};
 }
 
 function saveTurnos(data) {
   localStorage.setItem('ph_turnos', JSON.stringify(data));
-  const btn = document.getElementById('btn-guardar');
-  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
+  _markPending();
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────
@@ -2188,6 +2225,7 @@ document.getElementById('export-desde').value = y + '-' + m + '-01';
 document.getElementById('export-hasta').value = y + '-' + m + '-' + String(lastDay).padStart(2,'0');
 renderSchedule();
 renderPersonal();
+sbCargarInicio();
 </script>
 </body>
 </html>
