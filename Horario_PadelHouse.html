@@ -681,57 +681,64 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
-  firebase.initializeApp({
-    apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
-    databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
-    projectId: "padel-house-horarios",
-    appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
-  });
-  const fbdb = firebase.database();
-  window.fbdb = fbdb;
+firebase.initializeApp({
+  apiKey: "AIzaSyCrcRbDpBZ13ztauSafXW-yRxNAJUgIbqo",
+  databaseURL: "https://padel-house-horarios-default-rtdb.firebaseio.com",
+  projectId: "padel-house-horarios",
+  appId: "1:53844596745:web:a5b53f8963a8ae36c780d8"
+});
+const _db = firebase.database();
 
-  // Guardar en Firebase (fuente de verdad)
-  window.fbSavePersonal = d => fbdb.ref('personal').set(d);
-  window.fbSaveTurnos   = d => fbdb.ref('turnos').set(d);
+// Estado de conexion
+_db.ref('.info/connected').on('value', s => {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = s.val() ? '🟢' : '🔴';
+});
 
-  // Carga inicial desde Firebase al abrir la app
-  let _initDone = false;
-  Promise.all([
-    fbdb.ref('personal').once('value'),
-    fbdb.ref('turnos').once('value')
-  ]).then(([snapP, snapT]) => {
-    const p = snapP.val();
-    const t = snapT.val();
-    if (p && Array.isArray(p) && p.length > 0) window.personal = p;
-    if (t && typeof t === 'object' && Object.keys(t).length > 0) window.turnos = t;
-    _initDone = true;
-    if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
-  }).catch(() => { _initDone = true; });
-
-  // Escuchar cambios en tiempo real de OTROS dispositivos
-  fbdb.ref('personal').on('value', snap => {
-    if (!_initDone) return; // esperar carga inicial
-    const d = snap.val();
-    if (d && Array.isArray(d) && d.length > 0) {
-      window.personal = d;
-      if (window.renderPersonal) { renderPersonal(); renderSchedule(); }
+// GUARDAR — sube personal y turnos a Firebase
+function fbGuardar() {
+  const btn = document.getElementById('btn-guardar');
+  btn.textContent = '⏳'; btn.disabled = true;
+  _db.ref('ph').set({ personal: window.personal, turnos: window.turnos }, err => {
+    if (err) {
+      showToast('❌ Error al guardar');
+    } else {
+      showToast('✅ Guardado en Firebase');
+      btn.textContent = '✅';
+      setTimeout(() => { btn.textContent = '💾 Guardar'; btn.disabled = false; }, 1500);
+      return;
     }
+    btn.textContent = '💾 Guardar'; btn.disabled = false;
   });
+}
 
-  fbdb.ref('turnos').on('value', snap => {
-    if (!_initDone) return; // esperar carga inicial
+// ACTUALIZAR — baja personal y turnos de Firebase
+function fbActualizar() {
+  const btn = document.getElementById('btn-actualizar');
+  btn.textContent = '⏳'; btn.disabled = true;
+  _db.ref('ph').get().then(snap => {
     const d = snap.val();
-    if (d && typeof d === 'object' && Object.keys(d).length > 0) {
-      window.turnos = d;
-      if (window.renderSchedule) renderSchedule();
+    if (d) {
+      if (d.personal && Array.isArray(d.personal) && d.personal.length > 0) {
+        window.personal = d.personal;
+        localStorage.setItem('ph_personal', JSON.stringify(d.personal));
+      }
+      if (d.turnos && typeof d.turnos === 'object') {
+        window.turnos = d.turnos;
+        localStorage.setItem('ph_turnos', JSON.stringify(d.turnos));
+      }
+      renderPersonal();
+      renderSchedule();
+      showToast('✅ Datos actualizados');
+    } else {
+      showToast('ℹ️ Firebase vacío — guardá primero');
     }
+    btn.textContent = '🔄 Actualizar'; btn.disabled = false;
+  }).catch(() => {
+    showToast('❌ Error al actualizar');
+    btn.textContent = '🔄 Actualizar'; btn.disabled = false;
   });
-
-  // Indicador conexion
-  fbdb.ref('.info/connected').on('value', snap => {
-    const el = document.getElementById('sync-status');
-    if (el) el.textContent = snap.val() ? '🟢 en línea' : '🔴 sin conexión';
-  });
+}
 </script>
 </head>
 <body>
@@ -746,17 +753,9 @@ body {
     </div>
   </div>
   <div class="nav-actions" style="display:flex;gap:8px;align-items:center;">
-    <span id="sync-status" style="font-size:10px;color:#888;margin-right:4px;">⏳</span>
-    <button onclick="actualizarDesdeFirebase()" id="btn-actualizar" style="
-      background:#3498db;color:white;border:none;padding:8px 16px;
-      border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
-      font-family:'DM Sans',sans-serif;transition:all 0.2s;
-    ">🔄 Actualizar</button>
-    <button onclick="guardarTodo()" id="btn-guardar" style="
-      background:#2ecc71;color:white;border:none;padding:8px 16px;
-      border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
-      font-family:'DM Sans',sans-serif;transition:all 0.2s;
-    ">💾 Guardar</button>
+    <span id="sync-status" style="font-size:11px;color:#888;">⏳</span>
+    <button id="btn-actualizar" onclick="fbActualizar()" style="background:#3498db;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Actualizar</button>
+    <button id="btn-guardar" onclick="fbGuardar()" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Guardar</button>
   </div>
 </nav>
 
@@ -962,7 +961,8 @@ const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
 function loadPersonal() {
-  return []; // Firebase es la fuente — se carga via onValue
+  const raw = localStorage.getItem('ph_personal');
+  return raw ? JSON.parse(raw) : [];
 }
 
 function savePersonal(data) {
@@ -971,7 +971,8 @@ function savePersonal(data) {
 }
 
 function loadTurnos() {
-  return {}; // Firebase es la fuente — se carga via onValue
+  const raw = localStorage.getItem('ph_turnos');
+  return raw ? JSON.parse(raw) : {};
 }
 
 function saveTurnos(data) {
@@ -982,11 +983,7 @@ function saveTurnos(data) {
 // ── STATE ─────────────────────────────────────────────────────────────────
 let personal = loadPersonal();
 let turnos   = loadTurnos();
-let currentWeekStart = (() => {
-  const saved = localStorage.getItem('_ph_semana');
-  if (saved) { localStorage.removeItem('_ph_semana'); return new Date(saved); }
-  return getMonday(new Date());
-})();
+let currentWeekStart = getMonday(new Date());
 const currentSede = 'todas';
 let modalCtx = null; // { empId, dateKey }
 let modalTipo = 'SERVICIO';
@@ -1292,40 +1289,9 @@ function applyPreset(tipo, entrada, descInicio, salida) {
   updateHorasPreview();
 }
 
-function actualizarDesdeFirebase() {
-  // Guardar semana actual para restaurarla despues de recargar
-  const semana = currentWeekStart.toISOString();
-  localStorage.setItem('_ph_semana', semana);
-  // Recargar pagina — Firebase carga los datos frescos al iniciar
-  location.reload();
-}
 
-function guardarTodo() {
-  const btn = document.getElementById('btn-guardar');
-  if (!window.fbSavePersonal) { showToast('⚠️ Sin conexión a Firebase'); return; }
-  btn.textContent = '⏳ Guardando...';
-  btn.style.background = '#f5a623';
-  btn.disabled = true;
-  // Guardar personal y turnos en Firebase
-  Promise.all([
-    window.fbSavePersonal(personal),
-    window.fbSaveTurnos(turnos)
-  ]).then(() => {
-    btn.textContent = '✅ Guardado';
-    btn.style.background = '#2ecc71';
-    btn.disabled = false;
-    setTimeout(() => {
-      btn.textContent = '💾 Guardar';
-      btn.style.background = '#2ecc71';
-    }, 2000);
-    showToast('✅ Datos guardados y sincronizados');
-  }).catch(e => {
-    btn.textContent = '❌ Error';
-    btn.style.background = '#e74c3c';
-    btn.disabled = false;
-    showToast('❌ Error al guardar: ' + e.message);
-  });
-}
+
+
 
 function closeModal() {
   document.getElementById('modal-turno').classList.remove('open');
